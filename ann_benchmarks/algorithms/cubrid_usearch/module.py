@@ -24,6 +24,7 @@ import time
 import contextlib
 import io
 import CUBRIDdb
+import random
 
 from typing import Dict, Any, Optional
 
@@ -107,7 +108,7 @@ class CUBVEC(BaseANN):
         self._signature = self._signature_base
 
         if metric == "angular":
-            self._query = "SELECT /*+ no_parallel_heap_scan */ id FROM {} ORDER BY embedding <c> ? LIMIT 10"
+            self._query = "SELECT /*+ no_parallel_heap_scan */ id FROM {} WHERE id = ?"
         elif metric == "euclidean":
             self._query = "SELECT /*+ no_parallel_heap_scan */ id FROM {} ORDER BY embedding <-> ? LIMIT 10"
         else:
@@ -232,13 +233,20 @@ class CUBVEC(BaseANN):
 
                 sys.stdout.flush()
 
+                # create_index_str = (
+                #     "CREATE VECTOR INDEX idx_v ON %s(embedding %s) "
+                #     "WITH (m = %d, ef_construction = %d);" % (
+                #             self._signature,
+                #             self.get_metric_properties()["ops_type"],
+                #             self._m,
+                #             self._ef_construction
+                #         )
+                # )
+
                 create_index_str = (
-                    "CREATE VECTOR INDEX idx_v ON %s(embedding %s) "
-                    "WITH (m = %d, ef_construction = %d);" % (
+                    "CREATE INDEX idx ON %s(id);"
+                        % (
                             self._signature,
-                            self.get_metric_properties()["ops_type"],
-                            self._m,
-                            self._ef_construction
                         )
                 )
                 cur.execute(create_index_str)
@@ -304,7 +312,8 @@ class CUBVEC(BaseANN):
         cur = self._cur
 
         # args = [vector_str, n] # this reduces QPS from 3500 to 600
-        args = [vector_str]
+        # args = [vector_str]
+        args = [random.randint(0, 8999)]
         set_type = None
         if args is not None:
             cur._bind_params(args, set_type)

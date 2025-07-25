@@ -27,6 +27,7 @@ import subprocess
 import sys
 import threading
 import time
+import random
 
 import pgvector.psycopg
 import psycopg
@@ -214,7 +215,7 @@ class PGVector(BaseANN):
         self._cur = None
 
         if metric == "angular":
-            self._query = "SELECT id FROM items ORDER BY embedding <=> %s LIMIT %s"
+            self._query = "SELECT id FROM items where id = %s"
         elif metric == "euclidean":
             self._query = "SELECT id FROM items ORDER BY embedding <-> %s LIMIT %s"
         else:
@@ -310,22 +311,22 @@ class PGVector(BaseANN):
 
         print("creating index...")
         sys.stdout.flush()
+        # create_index_str = \
+        #     "CREATE INDEX ON items USING hnsw (embedding vector_%s_ops) " \
+        #     "WITH (m = %d, ef_construction = %d)" % (
+        #         self.get_metric_properties()["ops_type"],
+        #         self._m,
+        #         self._ef_construction
+        #     )
         create_index_str = \
-            "CREATE INDEX ON items USING hnsw (embedding vector_%s_ops) " \
-            "WITH (m = %d, ef_construction = %d)" % (
-                self.get_metric_properties()["ops_type"],
-                self._m,
-                self._ef_construction
-            )
-        progress_monitor = IndexingProgressMonitor(psycopg_connect_kwargs)
-        progress_monitor.start_monitoring_thread()
+            "CREATE INDEX ON items USING BTREE (id)"
 
         try:
             cur.execute(create_index_str)
         finally:
-            progress_monitor.stop_monitoring_thread()
+            pass
         print("done!")
-        progress_monitor.report_timings()
+        # progress_monitor.report_timings()
         self._cur = cur
 
     def set_query_arguments(self, ef_search):
@@ -333,14 +334,16 @@ class PGVector(BaseANN):
         self._cur.execute("SET hnsw.ef_search = %d" % ef_search)
 
     def query(self, v, n):
-        self._cur.execute(self._query, (v, n), binary=True, prepare=True)
+        # self._cur.execute(self._query, (v, n), binary=True, prepare=True)
+        self._cur.execute(self._query, (str(random.randint(0, 9000)),), binary=True, prepare=True)
         return [id for id, in self._cur.fetchall()]
 
     def get_memory_usage(self):
-        if self._cur is None:
-            return 0
-        self._cur.execute("SELECT pg_relation_size('items_embedding_idx')")
-        return self._cur.fetchone()[0] / 1024
+        return 0
+        # if self._cur is None:
+        #     return 0
+        # self._cur.execute("SELECT pg_relation_size('items_embedding_idx')")
+        # return self._cur.fetchone()[0] / 1024
 
     def __str__(self):
         return f"PGVector(m={self._m}, ef_construction={self._ef_construction}, ef_search={self._ef_search})"
